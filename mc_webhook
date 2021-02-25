@@ -1,0 +1,79 @@
+<?php
+
+// created by Jon Shogren 2021
+
+require_once('/path/to/mailchimp-transactional-php/vendor/autoload.php');
+
+//accept the webhook
+http_response_code(200);
+
+//url decode the webhook payload into json variables
+parse_str(file_get_contents('php://input'), $payload);
+
+//this logs part of the webhook payload to a text file. 
+//substitute in any database code here
+file_put_contents('mc_webhook.txt', "\r\n" 
+. "This is your " . $payload['type'] . " webhook event:" . "\r\n" 
+. $payload['data']['email'] . "\r\n" . "It was fired at: " . $payload['fired_at'] . "\r\n"
+, FILE_APPEND);
+
+$transactionalReply = $payload['data']['email'];
+
+//the Mandrill send function
+function send($message)
+{
+    try {
+        $mailchimp = new MailchimpTransactional\ApiClient();
+        $mailchimp->setApiKey('YOUR_API_KEY_HERE');
+
+        $response = $mailchimp->messages->send(["message" => $message]);
+        print_r($response);
+
+    } catch (Error $e) {
+        echo 'mc_webhook.txt', 'Error: ', $e->getMessage(), "\n";
+    }
+}
+
+//the subscribed and unsubscribed emails
+//fill in your own from_email and from_name
+$subscribed = [
+    "from_email" => "YOUR_FROM_EMAIL",
+    "from_name" => "YOUR_FROM_NAME",
+    "subject" => "Thanks for signing up!",
+    "text" => "This is your sign up confirmation. Thanks!",
+    "tags" =>  [
+        "mc_webhook_subscribe	"
+    ],
+    "to" => [
+        [
+            "email" => $transactionalReply,
+            "type" => "to"
+        ]
+    ]
+];
+
+$unsubscribed = [
+    "from_email" => "YOUR_FROM_EMAIL",
+    "from_name" => "YOUR_FROM_NAME",
+    "subject" => "Sorry to see you go!!",
+    "text" => "This is your unsubscribe confirmation. Have a great day!",
+    "tags" =>  [
+        "mc_webhook_unsubscribe"
+    ],
+    "to" => [
+        [
+            "email" => $transactionalReply,
+            "type" => "to"
+        ]
+    ]
+];
+
+
+//conditional to trigger the appropraite email
+if ($payload['type'] == "subscribe"){
+    send($subscribed);
+} elseif ($payload['type'] == "unsubscribe"){
+    send($unsubscribed);
+} else {
+    
+}
